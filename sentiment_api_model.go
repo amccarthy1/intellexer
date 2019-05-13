@@ -4,14 +4,18 @@ import (
 	"github.com/google/uuid"
 )
 
-type ontology string
+// Ontology is a context within which sentiment analysis evaluates reviews.
+type Ontology string
 
-// These are all the supported ontologies for intellexer. An intellexer ontology
-// is the target domain of a review.
+// These are all the supported ontologies for intellexer.
+// Note that the endpoint for listing these will capitalize these, but the
+// sentiment analysis endpoint will not. The API is case-insensitive, so for the
+// purposes of unit testing, they will be all lowercase. It is recommended to
+// convert to lowercase in any code expecting equality.
 const (
-	Hotels      = ontology("Hotels")
-	Restaurants = ontology("Restaurants")
-	Gadgets     = ontology("Gadgets")
+	Hotels      = Ontology("hotels")
+	Restaurants = Ontology("restaurants")
+	Gadgets     = Ontology("gadgets")
 )
 
 // Opinion is a nested set of analyzed components of a review. It contains data
@@ -21,9 +25,9 @@ type Opinion struct {
 	// this opinion
 	Children []Opinion `json:"children"`
 	// F is an undocumented field
-	F int64 `json:"f"`
+	F int `json:"f"`
 	// RS is an undocumented field
-	RS []int64 `json:"rs"`
+	RS []int `json:"rs"`
 	// Text is either the topic of this opinion or the text from the review that
 	// it is based on. This may not always come directly from the review text.
 	Text *string `json:"t"`
@@ -57,29 +61,29 @@ type Sentence struct {
 	SentimentWeight float64 `json:"w"`
 }
 
-type sentimentResponse struct {
-	SentimentsCount int        `json:"sentimentsCount"`
-	Ontology        ontology   `json:"ontology"`
-	Sentences       []Sentence `json:"sentences"`
-	Opinions        []Opinion  `json:"opinions"`
+// SentimentResponse is the response format from the AnalyzeSentiments API
+type SentimentResponse struct {
+	SentimentsCount int         `json:"sentimentsCount"`
+	Ontology        Ontology    `json:"ontology"`
+	Sentences       []Sentence  `json:"sentences"`
+	Opinions        Opinion     `json:"opinions"`
+	Sentiments      []Sentiment `json:"sentiments"`
 }
 
-type sentimentRequest struct {
+// Review is the text and ID of a review that should be analyzed for sentiment.
+type Review struct {
 	ID   uuid.UUID `json:"id"`
 	Text string    `json:"text"`
 }
-
-// AnalyzeSentimentsRequest is a request to the /analyzeSentiments endpoint
-type AnalyzeSentimentsRequest []sentimentRequest
 
 // NewAnalyzeSentimentsRequestBody returns a new request body for the
 // /analyzeSentiments endpoint, generating UUIDs for each review. It is not
 // recommended to use this, callers are instead recommended to generate their
 // own UUIDs so they can be cross-referenced with the results.
-func NewAnalyzeSentimentsRequestBody(reviews []string) AnalyzeSentimentsRequest {
-	var sentimentRequests AnalyzeSentimentsRequest
+func NewAnalyzeSentimentsRequestBody(reviews []string) []Review {
+	var sentimentRequests []Review
 	for _, review := range reviews {
-		sentimentRequests = append(sentimentRequests, sentimentRequest{
+		sentimentRequests = append(sentimentRequests, Review{
 			ID:   uuid.New(),
 			Text: review,
 		})
