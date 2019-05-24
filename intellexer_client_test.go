@@ -15,7 +15,7 @@ func newMockClient(statusCode int, body string) mockClient {
 		Body:       ioutil.NopCloser(bytes.NewReader([]byte(body))),
 		StatusCode: statusCode,
 	}
-	return mockClient{res}
+	return mockClient{response: res}
 }
 
 func newMockClientFromFile(statusCode int, filename string) mockClient {
@@ -23,7 +23,7 @@ func newMockClientFromFile(statusCode int, filename string) mockClient {
 	if err != nil {
 		panic(err)
 	}
-	return mockClient{&http.Response{
+	return mockClient{response: &http.Response{
 		Body:       file,
 		StatusCode: statusCode,
 	}}
@@ -31,10 +31,11 @@ func newMockClientFromFile(statusCode int, filename string) mockClient {
 
 type mockClient struct {
 	response *http.Response
+	err      error
 }
 
 func (mc mockClient) Do(*http.Request) (*http.Response, error) {
-	return mc.response, nil
+	return mc.response, mc.err
 }
 
 func TestQueryString(t *testing.T) {
@@ -75,4 +76,15 @@ func TestListOntologies(t *testing.T) {
 	assert.Equal(t, ontologies[0], Ontology("Hotels"))
 	assert.Equal(t, ontologies[1], Ontology("Restaurants"))
 	assert.Equal(t, ontologies[2], Ontology("Gadgets"))
+}
+
+func TestAnalyzeSentiments(t *testing.T) {
+	client := newMockClientFromFile(200, "testdata/analyze_sentiments_response.json")
+	apiClient := NewClient("test").WithBaseURL("FAKEURL").WithHTTPClient(client)
+	res, err := apiClient.AnalyzeSentiments(Restaurants, NewAnalyzeSentimentsRequestBody([]string{
+		"I love coffee",
+		"I hate coffee",
+	}))
+	assert.Nil(t, err)
+	assert.NotNil(t, res)
 }

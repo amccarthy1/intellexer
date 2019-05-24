@@ -3,6 +3,7 @@ package intellexer
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 )
 
 const (
@@ -11,7 +12,7 @@ const (
 )
 
 // ListOntologies lists the ontologies available for analysis
-func (c Client) ListOntologies() ([]Ontology, error) {
+func (c *Client) ListOntologies() ([]Ontology, error) {
 	res, err := c.get(fmt.Sprintf("%s?%s", listOntologiesURL, c.queryString()))
 	if err != nil {
 		return nil, err
@@ -23,15 +24,21 @@ func (c Client) ListOntologies() ([]Ontology, error) {
 }
 
 // AnalyzeSentiments analyzes the reviews passed in for overall sentiment.
-func (c Client) AnalyzeSentiments(ontology Ontology, reviews []Review) (*SentimentResponse, error) {
-	url := fmt.Sprintf("%s?%s", listOntologiesURL, c.queryString(param{"ontology", string(ontology)}))
+// You should assume this call will take a while. It is a network call to a
+// machine learning-based API, and therefore could have a lot of overhead.
+// Also, take care not to exceed the request size determined by your API level.
+func (c *Client) AnalyzeSentiments(ontology Ontology, reviews []Review) (*SentimentResponse, error) {
+	url := fmt.Sprintf("%s?%s", analyzeSentimentsURL, c.queryString(param{"ontology", string(ontology)}))
 	res, err := c.post(url, reviews)
 	if err != nil {
 		return nil, err
 	}
 	var sentimentResponse SentimentResponse
-	decoder := json.NewDecoder(res.Body)
-	err = decoder.Decode(&sentimentResponse)
+	bytes, _ := ioutil.ReadAll(res.Body)
+	fmt.Println(string(bytes))
+	// decoder := json.NewDecoder(res.Body)
+	// err = decoder.Decode(&sentimentResponse)
+	err = json.Unmarshal(bytes, &sentimentResponse)
 	if err != nil {
 		return nil, err
 	}

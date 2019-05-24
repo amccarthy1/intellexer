@@ -12,6 +12,27 @@ import (
 
 const defaultBaseURL = "https://api.intellexer.com"
 
+// NewClient returns a new client with the specified API key
+func NewClient(apiKey string) *Client {
+	return &Client{
+		apiKey: apiKey,
+	}
+}
+
+// WithHTTPClient sets the internal HTTP client that should be used.
+// Default is http.DefaultClient
+func (c *Client) WithHTTPClient(client httpClient) *Client {
+	c.client = client
+	return c
+}
+
+// WithBaseURL sets the internal base URL to hit when sending API requests.
+// Overriding is useful for testing and development.
+func (c *Client) WithBaseURL(baseURL string) *Client {
+	c.baseURL = baseURL
+	return c
+}
+
 type httpClient interface {
 	// Do sends an HTTP request
 	Do(req *http.Request) (*http.Response, error)
@@ -29,7 +50,7 @@ type Client struct {
 	client  httpClient
 }
 
-func (c Client) queryString(params ...param) string {
+func (c *Client) queryString(params ...param) string {
 	qString := url.Values(make(map[string][]string))
 	qString.Add("apiKey", c.apiKey)
 	for _, param := range params {
@@ -38,7 +59,7 @@ func (c Client) queryString(params ...param) string {
 	return qString.Encode()
 }
 
-func (c Client) getPath(path string) string {
+func (c *Client) getPath(path string) string {
 	// use custom URL if provided, otherwise default to base.
 	url := c.baseURL
 	if len(url) == 0 {
@@ -47,14 +68,14 @@ func (c Client) getPath(path string) string {
 	return fmt.Sprintf("%s/%s", url, path)
 }
 
-func (c Client) getHTTPClient() httpClient {
+func (c *Client) getHTTPClient() httpClient {
 	if c.client != nil {
 		return c.client
 	}
 	return http.DefaultClient
 }
 
-func (c Client) get(path string) (*http.Response, error) {
+func (c *Client) get(path string) (*http.Response, error) {
 	req, err := http.NewRequest("GET", c.getPath(path), nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "Request creation failed")
@@ -66,7 +87,7 @@ func (c Client) get(path string) (*http.Response, error) {
 	return handleResponseErrorCodes(res)
 }
 
-func (c Client) post(path string, jsonBody interface{}) (*http.Response, error) {
+func (c *Client) post(path string, jsonBody interface{}) (*http.Response, error) {
 	body, err := json.Marshal(jsonBody)
 	if err != nil {
 		return nil, errors.Wrap(err, "JSON serialization failed")
@@ -75,6 +96,7 @@ func (c Client) post(path string, jsonBody interface{}) (*http.Response, error) 
 	if err != nil {
 		return nil, errors.Wrap(err, "Request creation failed")
 	}
+	req.Header.Add("Content-Type", "application/json")
 	res, err := c.getHTTPClient().Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "Request failed")
