@@ -1,42 +1,12 @@
 package intellexer
 
 import (
-	"bytes"
-	"io/ioutil"
-	"net/http"
-	"os"
 	"testing"
 
+	"github.com/amccarthy1/intellexer/mocks"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
-
-func newMockClient(statusCode int, body string) mockClient {
-	res := &http.Response{
-		Body:       ioutil.NopCloser(bytes.NewReader([]byte(body))),
-		StatusCode: statusCode,
-	}
-	return mockClient{response: res}
-}
-
-func newMockClientFromFile(statusCode int, filename string) mockClient {
-	file, err := os.Open(filename)
-	if err != nil {
-		panic(err)
-	}
-	return mockClient{response: &http.Response{
-		Body:       file,
-		StatusCode: statusCode,
-	}}
-}
-
-type mockClient struct {
-	response *http.Response
-	err      error
-}
-
-func (mc mockClient) Do(*http.Request) (*http.Response, error) {
-	return mc.response, mc.err
-}
 
 func TestQueryString(t *testing.T) {
 	client := &Client{
@@ -59,7 +29,7 @@ func TestGetPath(t *testing.T) {
 }
 
 func TestListOntologies(t *testing.T) {
-	client := newMockClient(200, `["foo", "bar", "baz"]`)
+	client := mocks.NewMockClient(200, `["foo", "bar", "baz"]`)
 	apiClient := &Client{
 		baseURL: "FAKEURL",
 		apiKey:  "test",
@@ -69,7 +39,7 @@ func TestListOntologies(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Len(t, ontologies, 3)
 
-	apiClient.client = newMockClientFromFile(200, "testdata/list_ontologies_response.json")
+	apiClient.client = mocks.NewMockClientFromFile(200, "testdata/list_ontologies_response.json")
 	ontologies, err = apiClient.ListOntologies()
 	assert.Nil(t, err)
 	assert.Len(t, ontologies, 3)
@@ -79,12 +49,67 @@ func TestListOntologies(t *testing.T) {
 }
 
 func TestAnalyzeSentiments(t *testing.T) {
-	client := newMockClientFromFile(200, "testdata/analyze_sentiments_response.json")
+	client := mocks.NewMockClientFromFile(200, "testdata/analyze_sentiments_response.json")
 	apiClient := NewClient("test").WithBaseURL("FAKEURL").WithHTTPClient(client)
-	res, err := apiClient.AnalyzeSentiments(Restaurants, NewAnalyzeSentimentsRequestBody([]string{
-		"I love coffee",
-		"I hate coffee",
-	}))
+	body := NewAnalyzeSentimentsRequestBody([]string{"I love coffee", "I hate coffee"})
+	res, err := apiClient.AnalyzeSentiments(Restaurants, body)
 	assert.Nil(t, err)
 	assert.NotNil(t, res)
+}
+
+func TestAPIErrors(t *testing.T) {
+	client := mocks.NewMockClientFromFile(400, "testdata/content_type_error.xhtml")
+	apiClient := NewClient("test").WithBaseURL("FAKEURL").WithHTTPClient(client)
+	body := NewAnalyzeSentimentsRequestBody([]string{"foo", "bar"})
+	res, err := apiClient.AnalyzeSentiments(Restaurants, body)
+	assert.Nil(t, res)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "Request Error")
+	// Make sure this is an API error wrapped as pkg.error
+	cause := errors.Cause(err)
+	apiError, ok := cause.(APIError)
+	assert.True(t, ok)
+	assert.Equal(t, "Intellexer API responded with status code 400", apiError.Error())
+	assert.NotNil(t, apiError.Response)
+}
+
+func TestDeserializationErrors(t *testing.T) {
+	client := mocks.NewMockClient(200, "<html>I'm an HTML error</html>")
+	apiClient := NewClient("test").WithBaseURL("FAKEURL").WithHTTPClient(client)
+	body := NewAnalyzeSentimentsRequestBody([]string{"foo", "bar"})
+	sentiments, err := apiClient.AnalyzeSentiments(Restaurants, body)
+	assert.Nil(t, sentiments)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "Error deserializing response")
+	// Assert that this error has been wrapped
+	cause := errors.Cause(err)
+	assert.NotEqual(t, err, cause)
+
+	// same for ontologies
+	ontologies, err := apiClient.ListOntologies()
+	assert.Nil(t, ontologies)
+	assert.NotNil(t, err)
+	cause = errors.Cause(err)
+	assert.NotEqual(t, err, cause)
+}
+
+func TestInternalErrorStates(t *testing.T) {
+	client := mocks.NewErrorClient(errors.New("Test error"))
+	apiClient := NewClient("test").WithBaseURL("FAKEURL").WithHTTPClient(client)
+
+	_, err := apiClient.get("foo")
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "Request failed")
+
+	_, err = apiClient.post("bar", nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "Request failed")
+
+	// Channels cannot be serialized, and will trigger an error on json.Marshal
+	bad := make(chan bool)
+	defer close(bad)
+
+	_, err = apiClient.post("baz", bad)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "JSON serialization failed")
 }
