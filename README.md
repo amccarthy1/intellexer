@@ -21,3 +21,6 @@ client := intellexer.NewClient(apiKey).WithHTTPClient(http.DefaultClient)
         []intellexer.Review{review}
     )
 ```
+
+## Documentation
+Read the [godoc](https://godoc.org/github.com/amccarthy1/intellexer)
