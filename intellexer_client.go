@@ -4,14 +4,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/pkg/errors"
 )
 
 const (
 	defaultBaseURL            = "https://api.intellexer.com"
+	getTopicsFromURLEndpoint  = "getTopicsFromUrl"
+	getTopicsFromFileEndpoint = "getTopicsFromFile"
 	listOntologiesEndpoint    = "sentimentAnalyzerOntologies"
 	analyzeSentimentsEndpoint = "analyzeSentiments"
 )
@@ -112,6 +116,30 @@ func (c *Client) post(path string, jsonBody interface{}) (*http.Response, error)
 	return handleResponseErrorCodes(res)
 }
 
+func (c *Client) decodeRes(res *http.Response, out interface{}) error {
+	decoder := json.NewDecoder(res.Body)
+	if err := decoder.Decode(out); err != nil {
+		return errors.Wrap(err, "Error deserializing response")
+	}
+	return nil
+}
+
+func (c *Client) getJSON(path string, out interface{}) error {
+	res, err := c.get(path)
+	if err != nil {
+		return err
+	}
+	return c.decodeRes(res, out)
+}
+
+func (c *Client) postJSON(path string, jsonBody, out interface{}) error {
+	res, err := c.post(path, jsonBody)
+	if err != nil {
+		return err
+	}
+	return c.decodeRes(res, out)
+}
+
 func handleResponseErrorCodes(res *http.Response) (*http.Response, error) {
 	if res.StatusCode >= 500 {
 		err := APIError{res}
@@ -127,19 +155,49 @@ func handleResponseErrorCodes(res *http.Response) (*http.Response, error) {
 // =============================================================================
 // API Endpoint Implementations
 
-// ListOntologies lists the ontologies available for analysis
-func (c *Client) ListOntologies() ([]Ontology, error) {
-	res, err := c.get(fmt.Sprintf("%s?%s", listOntologiesEndpoint, c.queryString()))
+// GetTopicsFromURL gets a list of topics from the article at the given URL
+func (c *Client) GetTopicsFromURL(url string) ([]string, error) {
+	var topics []string
+	return topics, c.getJSON(
+		fmt.Sprintf("%s?%s", getTopicsFromURLEndpoint, c.queryString(param{"url", url})),
+		&topics,
+	)
+}
+
+// GetTopics gets a list of topics from the article read from the body.
+func (c *Client) GetTopics(body io.Reader) ([]string, error) {
+	var topics []string
+	url := fmt.Sprintf("%s?%s", getTopicsFromFileEndpoint, c.queryString())
+	req, err := http.NewRequest("POST", c.getPath(url), body)
+	if err != nil {
+		return nil, errors.Wrap(err, "Error creating request")
+	}
+	res, err := c.client.Do(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "Error sending request")
+	}
+	res, err = handleResponseErrorCodes(res)
 	if err != nil {
 		return nil, err
 	}
+	return topics, c.decodeRes(res, &topics)
+}
+
+// GetTopicsFromText gets a list of topics from the article provided as a string.
+// GetTopics is the preferred way to use this as it does not need to load the entire
+// article into memory at once and can stream it.
+func (c *Client) GetTopicsFromText(body string) ([]string, error) {
+	reader := strings.NewReader(body)
+	return c.GetTopics(reader)
+}
+
+// ListOntologies lists the ontologies available for analysis
+func (c *Client) ListOntologies() ([]Ontology, error) {
 	var ontologies []Ontology
-	decoder := json.NewDecoder(res.Body)
-	err = decoder.Decode(&ontologies)
-	if err != nil {
-		return nil, errors.Wrap(err, "Error deserializing response")
-	}
-	return ontologies, nil
+	return ontologies, c.getJSON(
+		fmt.Sprintf("%s?%s", listOntologiesEndpoint, c.queryString()),
+		&ontologies,
+	)
 }
 
 // AnalyzeSentiments analyzes the reviews passed in for overall sentiment.
@@ -148,15 +206,9 @@ func (c *Client) ListOntologies() ([]Ontology, error) {
 // Also, take care not to exceed the request size determined by your API level.
 func (c *Client) AnalyzeSentiments(ontology Ontology, reviews []Review) (*SentimentResponse, error) {
 	url := fmt.Sprintf("%s?%s", analyzeSentimentsEndpoint, c.queryString(param{"ontology", string(ontology)}))
-	res, err := c.post(url, reviews)
-	if err != nil {
-		return nil, err
-	}
 	var sentimentResponse SentimentResponse
-	decoder := json.NewDecoder(res.Body)
-	err = decoder.Decode(&sentimentResponse)
-	if err != nil {
-		return nil, errors.Wrap(err, "Error deserializing response")
+	if err := c.postJSON(url, reviews, &sentimentResponse); err != nil {
+		return nil, err
 	}
 	return &sentimentResponse, nil
 }

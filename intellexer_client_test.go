@@ -1,6 +1,7 @@
 package intellexer
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/amccarthy1/intellexer/mocks"
@@ -26,6 +27,32 @@ func TestGetPath(t *testing.T) {
 	assert.Equal(t, "https://api.intellexer.com/foo/bar/baz", client.getPath("foo/bar/baz"))
 	client.baseURL = "https://example.com"
 	assert.Equal(t, "https://example.com/foo/bar/baz", client.getPath("foo/bar/baz"))
+}
+
+func TestGetTopics(t *testing.T) {
+	article := "I'm an article about tech health care"
+	reader := strings.NewReader(article)
+	client := mocks.NewMockClientFromFile(200, "testdata/get_topics_response.json")
+	apiClient := NewClient("test").WithHTTPClient(client).WithBaseURL("FAKEURL")
+	topics, err := apiClient.GetTopics(reader)
+	assert.Nil(t, err)
+	assert.Len(t, topics, 2)
+	assert.Equal(t, topics[0], "Health.healthcare")
+	assert.Equal(t, topics[1], "Tech.information_technology")
+
+	apiClient.WithHTTPClient(mocks.NewMockClientFromFile(200, "testdata/get_topics_response.json"))
+	topics, err = apiClient.GetTopicsFromText(article)
+	assert.Nil(t, err)
+	assert.Len(t, topics, 2)
+	assert.Equal(t, topics[0], "Health.healthcare")
+	assert.Equal(t, topics[1], "Tech.information_technology")
+
+	apiClient.WithHTTPClient(mocks.NewMockClientFromFile(200, "testdata/get_topics_response.json"))
+	topics, err = apiClient.GetTopicsFromURL("blah/article_about_tech.php")
+	assert.Nil(t, err)
+	assert.Len(t, topics, 2)
+	assert.Equal(t, topics[0], "Health.healthcare")
+	assert.Equal(t, topics[1], "Tech.information_technology")
 }
 
 func TestListOntologies(t *testing.T) {
