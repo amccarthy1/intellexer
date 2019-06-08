@@ -40,14 +40,12 @@ func TestGetTopics(t *testing.T) {
 	assert.Equal(t, topics[0], "Health.healthcare")
 	assert.Equal(t, topics[1], "Tech.information_technology")
 
-	apiClient.WithHTTPClient(mocks.NewMockClientFromFile(200, "testdata/get_topics_response.json"))
 	topics, err = apiClient.GetTopicsFromText(article)
 	assert.Nil(t, err)
 	assert.Len(t, topics, 2)
 	assert.Equal(t, topics[0], "Health.healthcare")
 	assert.Equal(t, topics[1], "Tech.information_technology")
 
-	apiClient.WithHTTPClient(mocks.NewMockClientFromFile(200, "testdata/get_topics_response.json"))
 	topics, err = apiClient.GetTopicsFromURL("blah/article_about_tech.php")
 	assert.Nil(t, err)
 	assert.Len(t, topics, 2)

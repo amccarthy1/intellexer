@@ -1,3 +1,5 @@
+// Package main provides an example application making use of the intellexer API,
+// and also a command-line interface for exploring the API's behavior.
 package main
 
 import (

@@ -1,3 +1,5 @@
+// Package intellexer provides an API client implementation for various
+// endpoints in the Intellexer Natural Language Processing API.
 package intellexer
 
 import (
@@ -155,7 +157,8 @@ func handleResponseErrorCodes(res *http.Response) (*http.Response, error) {
 // =============================================================================
 // API Endpoint Implementations
 
-// GetTopicsFromURL gets a list of topics from the article at the given URL
+// GetTopicsFromURL gets a list of topics from the article at the given URL.
+// See doc for "GetTopics" for performance information.
 func (c *Client) GetTopicsFromURL(url string) ([]string, error) {
 	var topics []string
 	return topics, c.getJSON(
@@ -165,6 +168,9 @@ func (c *Client) GetTopicsFromURL(url string) ([]string, error) {
 }
 
 // GetTopics gets a list of topics from the article read from the body.
+// Note that this will actually cause the remote server to read through and
+// analyze the entire article, which will usually take a few seconds and tends
+// to scale with the size of the article.
 func (c *Client) GetTopics(body io.Reader) ([]string, error) {
 	var topics []string
 	url := fmt.Sprintf("%s?%s", getTopicsFromFileEndpoint, c.queryString())
@@ -183,15 +189,17 @@ func (c *Client) GetTopics(body io.Reader) ([]string, error) {
 	return topics, c.decodeRes(res, &topics)
 }
 
-// GetTopicsFromText gets a list of topics from the article provided as a string.
-// GetTopics is the preferred way to use this as it does not need to load the entire
-// article into memory at once and can stream it.
+// GetTopicsFromText is a convenience function to get topics from a string.
+// You probably want to use GetTopics instead if you already have an io.Reader.
 func (c *Client) GetTopicsFromText(body string) ([]string, error) {
 	reader := strings.NewReader(body)
 	return c.GetTopics(reader)
 }
 
-// ListOntologies lists the ontologies available for analysis
+// ListOntologies lists the ontologies available for analysis. This endpoint is
+// supported almost exclusively for completeness, the intellexer API only
+// supports three ontologies, 'Hotels', 'Restaurants', and 'Gadgets' which are
+// exported as `Hotels`, `Restaurants` and `Gadgets`.
 func (c *Client) ListOntologies() ([]Ontology, error) {
 	var ontologies []Ontology
 	return ontologies, c.getJSON(

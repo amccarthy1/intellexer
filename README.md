@@ -2,7 +2,9 @@ Intellexer Client for Golang
 ==========
 An API library for accessing the intellexer sentiment analysis API.
 
-This currently does not support any APIs besides the sentiment analysis endpoints.
+Currently, the following functionaity is implemented:
+* Topic Modeling (`GetTopics`, `GetTopicsFromURL`)
+* Sentiment Analysis (`AnalyzeSentiments`)
 
 ## Installation
 `go get github.com/amccarthy1/intellexer`
